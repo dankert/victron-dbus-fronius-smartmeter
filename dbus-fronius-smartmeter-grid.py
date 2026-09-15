@@ -75,7 +75,7 @@ class DbusDummyService:
     #u2 = float(site_data['UAC_L3'].get('Value'))
     #u3 = float(site_data['UAC_L2'].get('Value'))
 
-    inv_p = float(site_data.get('P_PV', 0))
+    inv_p = float(site_data.get('P_PV') or 0)
     inv_p1 = round(inv_p/3,1)
     inv_p2 = inv_p1
     inv_p3 = inv_p - inv_p1 - inv_p2
