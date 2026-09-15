@@ -57,58 +57,72 @@ class DbusDummyService:
 
   def _update(self):
     URL = "http://" + cfg.fronius_smartmeter["ipaddress"] + "/solar_api/v1/GetMeterRealtimeData.cgi?Scope=Device&DeviceId=0&DataCollection=MeterRealtimeData"
-    meter_r = requests.get(url = URL)
-    meter_data = meter_r.json()
-    data = meter_data['Body']['Data']
+    sm_meter_r = requests.get(url = URL)
+    inv_data = sm_meter_r.json()
+    sm_data = inv_data['Body']['Data']
 
+    #URL = "http://" + cfg.fronius_pvinverter["ipaddress"] + "/solar_api/v1/GetInverterRealtimeData.cgi?Scope=Device&DeviceId=1&DataCollection=3PInverterData"
     URL = "http://" + cfg.fronius_pvinverter["ipaddress"] + "/solar_api/v1/GetPowerFlowRealtimeData.fcgi?Scope=System"
-    meter_r_pv = requests.get(url=URL)
-    pvmeter_data = meter_r_pv.json()
+    inv_meter_r = requests.get(url=URL)
+    pvmeter_data = inv_meter_r.json()
+    #site_data = pvmeter_data['Body']['Data']
     site_data = pvmeter_data['Body']['Data']['Site']
+    # Calculate Power
+    #i1 = float(site_data['IAC_L1'].get('Value')) + float(sm_data.get('Current_AC_Phase_1', 0))
+    #i2 = float(site_data['IAC_L1'].get('Value')) + float(sm_data.get('Current_AC_Phase_2', 0))
+    #i3 = float(site_data['IAC_L3'].get('Value')) + float(sm_data.get('Current_AC_Phase_3', 0))
+    #u1 = float(site_data['UAC_L1'].get('Value'))
+    #u2 = float(site_data['UAC_L3'].get('Value'))
+    #u3 = float(site_data['UAC_L2'].get('Value'))
+
+    inv_p = float(site_data.get('P_PV', 0))
+    inv_p1 = round(inv_p/3,1)
+    inv_p2 = inv_p1
+    inv_p3 = inv_p - inv_p1 - inv_p2
+
+    p1 = -float(sm_data.get('PowerReal_P_Phase_1', 0)) - inv_p1
+    p2 = -float(sm_data.get('PowerReal_P_Phase_2', 0)) - inv_p2
+    p3 = -float(sm_data.get('PowerReal_P_Phase_3', 0)) - inv_p3
+    p = p1 + p2 + p3
 
     # Common Items
-    MeterConsumption = -float(data.get('PowerReal_P_Sum', 0))
-    #self._acloaddbusservice['/Ac/Power'] = MeterConsumption
-    #self._acloaddbusservice['/Ac/Current'] = float(data.get('Current_AC_Sum', 0))
-    #self._acloaddbusservice['/Ac/Energy/Forward'] = float(data.get('EnergyReal_WAC_Sum_Consumed', 0)) / 1000
-    #self._acloaddbusservice['/Ac/Energy/Reverse'] = float(data.get('EnergyReal_WAC_Sum_Produced', 0)) / 1000
+    self._gridbusservice['/Ac/Power'] = p
+    self._gridbusservice['/Ac/Current'] = 0
+    self._gridbusservice['/Ac/Energy/Forward'] = 0
+    self._gridbusservice['/Ac/Energy/Reverse'] = 0
     
     # Phase 1
-    #self._acloaddbusservice['/Ac/L1/Voltage'] = float(data.get('Voltage_AC_Phase_1', 0))
-    #self._acloaddbusservice['/Ac/L1/Current'] = float(data.get('Current_AC_Phase_1', 0))
-    #self._acloaddbusservice['/Ac/L1/Power'] = -float(data.get('PowerReal_P_Phase_1', 0))
-    #self._acloaddbusservice['/Ac/L1/Energy/Forward'] = float(data.get('EnergyReal_WAC_Sum_Consumed', 0)) / 1000
-    #self._acloaddbusservice['/Ac/L1/Energy/Reverse'] = float(data.get('EnergyReal_WAC_Sum_Produced', 0)) / 1000
+    self._gridbusservice['/Ac/L1/Voltage'] = 0.0
+    self._gridbusservice['/Ac/L1/Current'] = 0.0
+    self._gridbusservice['/Ac/L1/Power'] = p1
+    self._gridbusservice['/Ac/L1/Energy/Forward'] = 0
+    self._gridbusservice['/Ac/L1/Energy/Reverse'] = 0
 
-    #if cfg.fronius_smartmeter["numphases"] == 1:
-      #self._acloaddbusservice['/Ac/L2/Voltage'] = 0.0
-      #self._acloaddbusservice['/Ac/L3/Voltage'] = 0.0
-      #self._acloaddbusservice['/Ac/L2/Current'] = 0.0
-      #self._acloaddbusservice['/Ac/L3/Current'] = 0.0
-      #self._acloaddbusservice['/Ac/L2/Power'] = 0.0
-      #self._acloaddbusservice['/Ac/L3/Power'] = 0.0
-      #self._acloaddbusservice['/Ac/L2/Energy/Forward'] = 0.0
-      #self._acloaddbusservice['/Ac/L2/Energy/Reverse'] = 0.0
-      #self._acloaddbusservice['/Ac/L3/Energy/Forward'] = 0.0
-      #self._acloaddbusservice['/Ac/L3/Energy/Reverse'] = 0.0
-    #else:
+    if cfg.fronius_smartmeter["numphases"] == 1:
+      self._gridbusservice['/Ac/L2/Voltage'] = 0.0
+      self._gridbusservice['/Ac/L3/Voltage'] = 0.0
+      self._gridbusservice['/Ac/L2/Current'] = 0.0
+      self._gridbusservice['/Ac/L3/Current'] = 0.0
+      self._gridbusservice['/Ac/L2/Power'] = 0
+      self._gridbusservice['/Ac/L3/Power'] = 0
+      self._gridbusservice['/Ac/L2/Energy/Forward'] = 0.0
+      self._gridbusservice['/Ac/L2/Energy/Reverse'] = 0.0
+      self._gridbusservice['/Ac/L3/Energy/Forward'] = 0.0
+      self._gridbusservice['/Ac/L3/Energy/Reverse'] = 0.0
+    else:
       # Phase 2 & 3
-      #self._acloaddbusservice['/Ac/L2/Voltage'] = float(data.get('Voltage_AC_Phase_2', 0))
-      #self._acloaddbusservice['/Ac/L3/Voltage'] = float(data.get('Voltage_AC_Phase_3', 0))
-      #self._acloaddbusservice['/Ac/L2/Current'] = float(data.get('Current_AC_Phase_2', 0))
-      #self._acloaddbusservice['/Ac/L3/Current'] = float(data.get('Current_AC_Phase_3', 0))
-      #self._acloaddbusservice['/Ac/L2/Power'] = -float(data.get('PowerReal_P_Phase_2', 0))
-      #self._acloaddbusservice['/Ac/L3/Power'] = -float(data.get('PowerReal_P_Phase_3', 0))
-      #self._acloaddbusservice['/Ac/L2/Energy/Forward'] = 0
-      #self._acloaddbusservice['/Ac/L2/Energy/Reverse'] = 0
-      #self._acloaddbusservice['/Ac/L3/Energy/Forward'] = 0
-      #self._acloaddbusservice['/Ac/L3/Energy/Reverse'] = 0
+      self._gridbusservice['/Ac/L2/Voltage'] = 0.0
+      self._gridbusservice['/Ac/L3/Voltage'] = 0.0
+      self._gridbusservice['/Ac/L2/Current'] = 0.0
+      self._gridbusservice['/Ac/L3/Current'] = 0.0
+      self._gridbusservice['/Ac/L2/Power'] = p2
+      self._gridbusservice['/Ac/L3/Power'] = p3
+      self._gridbusservice['/Ac/L2/Energy/Forward'] = 0
+      self._gridbusservice['/Ac/L2/Energy/Reverse'] = 0
+      self._gridbusservice['/Ac/L3/Energy/Forward'] = 0
+      self._gridbusservice['/Ac/L3/Energy/Reverse'] = 0
 
-    fronius_pv = float(site_data.get('P_PV', 0))
-    virtual_grid = MeterConsumption - fronius_pv
-    self._gridbusservice['/Ac/Power'] = virtual_grid
-
-    logging.info("Grid Consumption: %s" % (virtual_grid))
+    logging.info("Grid Consumption: %s" % p)
     return True
 
   def _handlechangedvalue(self, path, value):
