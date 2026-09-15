@@ -50,10 +50,10 @@ class DbusDummyService:
       self._dbusservice.add_path(
         path, settings['initial'], writeable=True, onchangecallback=self._handlechangedvalue)
 
-    GLib.timeout_add(2000, self._update) # pause 10s before the next request
+    GLib.timeout_add(cfg.fronius_smartmeter["interval"], self._update) # pause before the next request
 
   def _update(self):
-    URL = "http://" + cfg.fronius["ipaddress"] + "/solar_api/v1/GetMeterRealtimeData.cgi?Scope=Device&DeviceId=0&DataCollection=MeterRealtimeData"
+    URL = "http://" + cfg.fronius_smartmeter["ipaddress"] + "/solar_api/v1/GetMeterRealtimeData.cgi?Scope=Device&DeviceId=0&DataCollection=MeterRealtimeData"
     meter_r = requests.get(url = URL)
     meter_data = meter_r.json()
     MeterModel = meter_data['Body']['Data']['Details']['Model']
@@ -70,10 +70,10 @@ class DbusDummyService:
     self._dbusservice['/Ac/L1/Voltage'] = float(data.get('Voltage_AC_Phase_1', 0))
     self._dbusservice['/Ac/L1/Current'] = float(data.get('Current_AC_Phase_1', 0))
     self._dbusservice['/Ac/L1/Power'] = -float(data.get('PowerReal_P_Phase_1', 0))
-    self._dbusservice['/Ac/L1/Energy/Forward'] = float(data.get('EnergyReal_WAC_Phase_1_Consumed', data.get('EnergyReal_WAC_Sum_Consumed', 0))) / 1000
-    self._dbusservice['/Ac/L1/Energy/Reverse'] = float(data.get('EnergyReal_WAC_Phase_1_Produced', data.get('EnergyReal_WAC_Sum_Produced', 0))) / 1000
+    self._dbusservice['/Ac/L1/Energy/Forward'] = float(data.get('EnergyReal_WAC_Sum_Consumed', 0)) / 1000
+    self._dbusservice['/Ac/L1/Energy/Reverse'] = float(data.get('EnergyReal_WAC_Sum_Produced', 0)) / 1000
 
-    if cfg.fronius["numphases"] == '1':
+    if cfg.fronius_smartmeter["numphases"] == 1:
       self._dbusservice['/Ac/L2/Voltage'] = 0.0
       self._dbusservice['/Ac/L3/Voltage'] = 0.0
       self._dbusservice['/Ac/L2/Current'] = 0.0
@@ -113,7 +113,7 @@ def main():
   DBusGMainLoop(set_as_default=True)
 
   pvac_output = DbusDummyService(
-    servicename='com.victronenergy.grid.fronius_smartmeter',
+    servicename='com.victronenergy.acload.'+cfg.fronius_smartmeter["name"],
     deviceinstance=0,
     paths={
       '/ErrorCode': {'initial': 0},
@@ -138,7 +138,7 @@ def main():
       '/Ac/L3/Energy/Reverse': {'initial': 0},
     })
 
-  logging.info('Connected to dbus, and switching over to gobject.MainLoop() (= event based)')
+  logging.info('Connected to DBUS, and switching over to gobject.MainLoop() (= event based)')
   mainloop = GLib.MainLoop()
   mainloop.run()
 
