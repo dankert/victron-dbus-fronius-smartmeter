@@ -114,7 +114,7 @@ def main():
 
   pvac_output = DbusDummyService(
     servicename='com.victronenergy.acload.'+cfg.fronius_smartmeter["name"],
-    deviceinstance=0,
+    deviceinstance=41,
     paths={
       '/ErrorCode': {'initial': 0},
       '/Ac/Power': {'initial': 0},

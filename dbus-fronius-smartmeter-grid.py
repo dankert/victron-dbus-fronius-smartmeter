@@ -44,7 +44,7 @@ class DbusDummyService:
       service.add_path('/Mgmt/ProcessVersion', 'Unkown version, and running on Python ' + platform.python_version())
 
       # Create the mandatory objects
-      service.add_path('/ProductId', 16) # value used in ac_sensor_bridge.cpp of dbus-cgwacs
+      service.add_path('/ProductId', 45058) # value used in ac_sensor_bridge.cpp of dbus-cgwacs
       service.add_path('/FirmwareVersion', 0.1)
       service.add_path('/HardwareVersion', 0)
       service.add_path('/Connected', 1)
