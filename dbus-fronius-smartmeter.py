@@ -92,10 +92,10 @@ class DbusDummyService:
       self._dbusservice['/Ac/L3/Current'] = float(data.get('Current_AC_Phase_3', 0))
       self._dbusservice['/Ac/L2/Power'] = -float(data.get('PowerReal_P_Phase_2', 0))
       self._dbusservice['/Ac/L3/Power'] = -float(data.get('PowerReal_P_Phase_3', 0))
-      self._dbusservice['/Ac/L2/Energy/Forward'] = float(data.get('EnergyReal_WAC_Phase_2_Consumed', 0)) / 1000
-      self._dbusservice['/Ac/L2/Energy/Reverse'] = float(data.get('EnergyReal_WAC_Phase_2_Produced', 0)) / 1000
-      self._dbusservice['/Ac/L3/Energy/Forward'] = float(data.get('EnergyReal_WAC_Phase_3_Consumed', 0)) / 1000
-      self._dbusservice['/Ac/L3/Energy/Reverse'] = float(data.get('EnergyReal_WAC_Phase_3_Produced', 0)) / 1000
+      self._dbusservice['/Ac/L2/Energy/Forward'] = 0
+      self._dbusservice['/Ac/L2/Energy/Reverse'] = 0
+      self._dbusservice['/Ac/L3/Energy/Forward'] = 0
+      self._dbusservice['/Ac/L3/Energy/Reverse'] = 0
 
     logging.info("House Consumption: %s" % (MeterConsumption))
     return True
