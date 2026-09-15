@@ -14,13 +14,13 @@ Used https://github.com/victronenergy/velib_python/blob/master/dbusdummyservice.
 Reading information from the Fronius Smart Meter via http REST API and puts the info on dbus.
 """
 import config as cfg # import config.py file
-import gobject
+from gi.repository import GLib
 import platform
 import logging
 import sys
 import os
 import requests # for http GET
-import thread   # for daemon = True
+import _thread as thread   # for daemon = True
 
 # our own packages
 sys.path.insert(1, os.path.join(os.path.dirname(__file__), '../ext/velib_python'))
@@ -46,29 +46,32 @@ class DbusDummyService:
     self._dbusservice.add_path('/HardwareVersion', 0)
     self._dbusservice.add_path('/Connected', 1)
 
-    for path, settings in self._paths.iteritems():
+    for path, settings in self._paths.items():
       self._dbusservice.add_path(
         path, settings['initial'], writeable=True, onchangecallback=self._handlechangedvalue)
 
-    gobject.timeout_add(200, self._update) # pause 200ms before the next request
+    GLib.timeout_add(2000, self._update) # pause 10s before the next request
 
   def _update(self):
     URL = "http://" + cfg.fronius["ipaddress"] + "/solar_api/v1/GetMeterRealtimeData.cgi?Scope=Device&DeviceId=0&DataCollection=MeterRealtimeData"
     meter_r = requests.get(url = URL)
     meter_data = meter_r.json()
     MeterModel = meter_data['Body']['Data']['Details']['Model']
+    data = meter_data['Body']['Data']
 
     # Common Items
-    MeterConsumption = float(meter_data['Body']['Data']['PowerReal_P_Sum'])
-    self._dbusservice['/Ac/Power'] = MeterConsumption # positive: consumption, negative: feed into grid
-    self._dbusservice['/Ac/Current'] = float(meter_data['Body']['Data']['Current_AC_Sum'])
-    self._dbusservice['/Ac/Energy/Forward'] = float(meter_data['Body']['Data']['EnergyReal_WAC_Sum_Consumed']) / 1000
-    self._dbusservice['/Ac/Energy/Reverse'] = float(meter_data['Body']['Data']['EnergyReal_WAC_Sum_Produced']) / 1000
-    self._dbusservice['/Ac/L1/Voltage'] = float(meter_data['Body']['Data']['Voltage_AC_Phase_1'])
-    self._dbusservice['/Ac/L1/Current'] = float(meter_data['Body']['Data']['Current_AC_Phase_1'])
-    self._dbusservice['/Ac/L1/Power'] = float(meter_data['Body']['Data']['PowerReal_P_Phase_1'])
-    self._dbusservice['/Ac/L1/Energy/Forward'] = float(meter_data['Body']['Data']['EnergyReal_WAC_Phase_1_Consumed']) / 1000
-    self._dbusservice['/Ac/L1/Energy/Reverse'] = float(meter_data['Body']['Data']['EnergyReal_WAC_Phase_1_Produced']) / 1000
+    MeterConsumption = -float(data.get('PowerReal_P_Sum', 0))
+    self._dbusservice['/Ac/Power'] = MeterConsumption
+    self._dbusservice['/Ac/Current'] = float(data.get('Current_AC_Sum', 0))
+    self._dbusservice['/Ac/Energy/Forward'] = float(data.get('EnergyReal_WAC_Sum_Consumed', 0)) / 1000
+    self._dbusservice['/Ac/Energy/Reverse'] = float(data.get('EnergyReal_WAC_Sum_Produced', 0)) / 1000
+    
+    # Phase 1
+    self._dbusservice['/Ac/L1/Voltage'] = float(data.get('Voltage_AC_Phase_1', 0))
+    self._dbusservice['/Ac/L1/Current'] = float(data.get('Current_AC_Phase_1', 0))
+    self._dbusservice['/Ac/L1/Power'] = -float(data.get('PowerReal_P_Phase_1', 0))
+    self._dbusservice['/Ac/L1/Energy/Forward'] = float(data.get('EnergyReal_WAC_Phase_1_Consumed', data.get('EnergyReal_WAC_Sum_Consumed', 0))) / 1000
+    self._dbusservice['/Ac/L1/Energy/Reverse'] = float(data.get('EnergyReal_WAC_Phase_1_Produced', data.get('EnergyReal_WAC_Sum_Produced', 0))) / 1000
 
     if cfg.fronius["numphases"] == '1':
       self._dbusservice['/Ac/L2/Voltage'] = 0.0
@@ -82,16 +85,17 @@ class DbusDummyService:
       self._dbusservice['/Ac/L3/Energy/Forward'] = 0.0
       self._dbusservice['/Ac/L3/Energy/Reverse'] = 0.0
     else:
-      self._dbusservice['/Ac/L2/Voltage'] = float(meter_data['Body']['Data']['Voltage_AC_Phase_2'])
-      self._dbusservice['/Ac/L3/Voltage'] = float(meter_data['Body']['Data']['Voltage_AC_Phase_3'])
-      self._dbusservice['/Ac/L2/Current'] = float(meter_data['Body']['Data']['Current_AC_Phase_2'])
-      self._dbusservice['/Ac/L3/Current'] = float(meter_data['Body']['Data']['Current_AC_Phase_3'])
-      self._dbusservice['/Ac/L2/Power'] = float(meter_data['Body']['Data']['PowerReal_P_Phase_2'])
-      self._dbusservice['/Ac/L3/Power'] = float(meter_data['Body']['Data']['PowerReal_P_Phase_3'])
-      self._dbusservice['/Ac/L2/Energy/Forward'] = float(meter_data['Body']['Data']['EnergyReal_WAC_Phase_2_Consumed']) / 1000
-      self._dbusservice['/Ac/L2/Energy/Reverse'] = float(meter_data['Body']['Data']['EnergyReal_WAC_Phase_2_Produced']) / 1000
-      self._dbusservice['/Ac/L3/Energy/Forward'] = float(meter_data['Body']['Data']['EnergyReal_WAC_Phase_3_Consumed']) / 1000
-      self._dbusservice['/Ac/L3/Energy/Reverse'] = float(meter_data['Body']['Data']['EnergyReal_WAC_Phase_3_Produced']) / 1000
+      # Phase 2 & 3
+      self._dbusservice['/Ac/L2/Voltage'] = float(data.get('Voltage_AC_Phase_2', 0))
+      self._dbusservice['/Ac/L3/Voltage'] = float(data.get('Voltage_AC_Phase_3', 0))
+      self._dbusservice['/Ac/L2/Current'] = float(data.get('Current_AC_Phase_2', 0))
+      self._dbusservice['/Ac/L3/Current'] = float(data.get('Current_AC_Phase_3', 0))
+      self._dbusservice['/Ac/L2/Power'] = -float(data.get('PowerReal_P_Phase_2', 0))
+      self._dbusservice['/Ac/L3/Power'] = -float(data.get('PowerReal_P_Phase_3', 0))
+      self._dbusservice['/Ac/L2/Energy/Forward'] = float(data.get('EnergyReal_WAC_Phase_2_Consumed', 0)) / 1000
+      self._dbusservice['/Ac/L2/Energy/Reverse'] = float(data.get('EnergyReal_WAC_Phase_2_Produced', 0)) / 1000
+      self._dbusservice['/Ac/L3/Energy/Forward'] = float(data.get('EnergyReal_WAC_Phase_3_Consumed', 0)) / 1000
+      self._dbusservice['/Ac/L3/Energy/Reverse'] = float(data.get('EnergyReal_WAC_Phase_3_Produced', 0)) / 1000
 
     logging.info("House Consumption: %s" % (MeterConsumption))
     return True
@@ -109,9 +113,10 @@ def main():
   DBusGMainLoop(set_as_default=True)
 
   pvac_output = DbusDummyService(
-    servicename='com.victronenergy.grid',
+    servicename='com.victronenergy.grid.fronius_smartmeter',
     deviceinstance=0,
     paths={
+      '/ErrorCode': {'initial': 0},
       '/Ac/Power': {'initial': 0},
       '/Ac/Current': {'initial': 0},
       '/Ac/Energy/Forward': {'initial': 0}, # energy bought from the grid
@@ -134,7 +139,7 @@ def main():
     })
 
   logging.info('Connected to dbus, and switching over to gobject.MainLoop() (= event based)')
-  mainloop = gobject.MainLoop()
+  mainloop = GLib.MainLoop()
   mainloop.run()
 
 if __name__ == "__main__":
