@@ -56,25 +56,31 @@ class DbusDummyService:
     GLib.timeout_add(cfg.fronius_smartmeter["interval"], self._update) # pause before the next request
 
   def _update(self):
-    URL = "http://" + cfg.fronius_smartmeter["ipaddress"] + "/solar_api/v1/GetMeterRealtimeData.cgi?Scope=Device&DeviceId=0&DataCollection=MeterRealtimeData"
-    sm_meter_r = requests.get(url = URL)
-    inv_data = sm_meter_r.json()
-    sm_data = inv_data['Body']['Data']
+    try:
+      # 1. Daten vom Smart Meter abrufen (mit 3 Sekunden Timeout)
+      URL = "http://" + cfg.fronius_smartmeter["ipaddress"] + "/solar_api/v1/GetMeterRealtimeData.cgi?Scope=Device&DeviceId=0&DataCollection=MeterRealtimeData"
+      sm_meter_r = requests.get(url=URL, timeout=3)
+      sm_meter_r.raise_for_status() # Löst bei HTTP-Fehlern (z.B. 404, 500) eine Exception aus
+      inv_data = sm_meter_r.json()
+      sm_data = inv_data['Body']['Data']
 
-    #URL = "http://" + cfg.fronius_pvinverter["ipaddress"] + "/solar_api/v1/GetInverterRealtimeData.cgi?Scope=Device&DeviceId=1&DataCollection=3PInverterData"
-    URL = "http://" + cfg.fronius_pvinverter["ipaddress"] + "/solar_api/v1/GetPowerFlowRealtimeData.fcgi?Scope=System"
-    inv_meter_r = requests.get(url=URL)
-    pvmeter_data = inv_meter_r.json()
-    #site_data = pvmeter_data['Body']['Data']
-    site_data = pvmeter_data['Body']['Data']['Site']
-    # Calculate Power
-    #i1 = float(site_data['IAC_L1'].get('Value')) + float(sm_data.get('Current_AC_Phase_1', 0))
-    #i2 = float(site_data['IAC_L1'].get('Value')) + float(sm_data.get('Current_AC_Phase_2', 0))
-    #i3 = float(site_data['IAC_L3'].get('Value')) + float(sm_data.get('Current_AC_Phase_3', 0))
-    #u1 = float(site_data['UAC_L1'].get('Value'))
-    #u2 = float(site_data['UAC_L3'].get('Value'))
-    #u3 = float(site_data['UAC_L2'].get('Value'))
+      # 2. Daten vom Wechselrichter abrufen (mit 3 Sekunden Timeout)
+      URL = "http://" + cfg.fronius_pvinverter["ipaddress"] + "/solar_api/v1/GetPowerFlowRealtimeData.fcgi?Scope=System"
+      inv_meter_r = requests.get(url=URL, timeout=3)
+      inv_meter_r.raise_for_status()
+      pvmeter_data = inv_meter_r.json()
+      site_data = pvmeter_data['Body']['Data']['Site']
 
+    except (requests.exceptions.RequestException, ValueError, KeyError) as e:
+      # Setzt den Fehlercode im D-Bus, damit VenusOS weiß, dass ein Problem vorliegt
+      self._gridbusservice['/ErrorCode'] = 1
+      logging.error("Fehler beim Abrufen oder Verarbeiten der Daten: %s" % e)
+      return True # Wichtig: True zurückgeben, damit GLib.timeout_add weiterhin läuft!
+
+    # Wenn alles erfolgreich war, Fehlercode zurücksetzen
+    self._gridbusservice['/ErrorCode'] = 0
+
+    # Berechnungen durchführen
     inv_p = float(site_data.get('P_PV') or 0)
     inv_p1 = round(inv_p/3,1)
     inv_p2 = inv_p1
@@ -90,7 +96,7 @@ class DbusDummyService:
     self._gridbusservice['/Ac/Current'] = 0
     self._gridbusservice['/Ac/Energy/Forward'] = 0
     self._gridbusservice['/Ac/Energy/Reverse'] = 0
-    
+
     # Phase 1
     self._gridbusservice['/Ac/L1/Voltage'] = 0.0
     self._gridbusservice['/Ac/L1/Current'] = 0.0
@@ -169,4 +175,3 @@ def main():
 
 if __name__ == "__main__":
   main()
-

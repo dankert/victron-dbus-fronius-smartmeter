@@ -53,11 +53,25 @@ class DbusDummyService:
     GLib.timeout_add(cfg.fronius_smartmeter["interval"], self._update) # pause before the next request
 
   def _update(self):
-    URL = "http://" + cfg.fronius_smartmeter["ipaddress"] + "/solar_api/v1/GetMeterRealtimeData.cgi?Scope=Device&DeviceId=0&DataCollection=MeterRealtimeData"
-    meter_r = requests.get(url = URL)
-    meter_data = meter_r.json()
-    MeterModel = meter_data['Body']['Data']['Details']['Model']
-    data = meter_data['Body']['Data']
+    try:
+      # Daten vom Smart Meter abrufen (mit 5 Sekunden Timeout)
+      URL = "http://" + cfg.fronius_smartmeter["ipaddress"] + "/solar_api/v1/GetMeterRealtimeData.cgi?Scope=Device&DeviceId=0&DataCollection=MeterRealtimeData"
+      meter_r = requests.get(url=URL, timeout=5)
+      meter_r.raise_for_status() # Löst bei HTTP-Fehlern (z.B. 404, 500) eine Exception aus
+      meter_data = meter_r.json()
+
+      # Datenstrukturen extrahieren
+      MeterModel = meter_data['Body']['Data']['Details']['Model']
+      data = meter_data['Body']['Data']
+
+    except (requests.exceptions.RequestException, ValueError, KeyError) as e:
+      # Setzt den Fehlercode im D-Bus, damit VenusOS über den Ausfall Bescheid weiß
+      self._dbusservice['/ErrorCode'] = 1
+      logging.error("Fehler beim Abrufen oder Verarbeiten der Smart-Meter-Daten: %s" % e)
+      return True # Wichtig: True zurückgeben, damit GLib.timeout_add weiterhin läuft!
+
+    # Wenn alles erfolgreich war, Fehlercode zurücksetzen
+    self._dbusservice['/ErrorCode'] = 0
 
     # Common Items
     MeterConsumption = -float(data.get('PowerReal_P_Sum', 0))
@@ -65,7 +79,7 @@ class DbusDummyService:
     self._dbusservice['/Ac/Current'] = float(data.get('Current_AC_Sum', 0))
     self._dbusservice['/Ac/Energy/Forward'] = float(data.get('EnergyReal_WAC_Sum_Consumed', 0)) / 1000
     self._dbusservice['/Ac/Energy/Reverse'] = float(data.get('EnergyReal_WAC_Sum_Produced', 0)) / 1000
-    
+
     # Phase 1
     self._dbusservice['/Ac/L1/Voltage'] = float(data.get('Voltage_AC_Phase_1', 0))
     self._dbusservice['/Ac/L1/Current'] = float(data.get('Current_AC_Phase_1', 0))
@@ -144,4 +158,3 @@ def main():
 
 if __name__ == "__main__":
   main()
-
