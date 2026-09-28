@@ -30,6 +30,7 @@ class DbusDummyService:
   def __init__(self, servicename, deviceinstance, paths, productname='Fronius Smart Meter', connection='Fronius Smart Meter service'):
     self._dbusservice = VeDbusService(servicename)
     self._paths = paths
+    self._session = requests.Session() # Aktiviert persistente HTTP-Verbindungen (Keep-Alive)
 
     logging.debug("%s /DeviceInstance = %d" % (servicename, deviceinstance))
 
@@ -55,9 +56,9 @@ class DbusDummyService:
 
   def _update(self):
     try:
-      # Daten vom Smart Meter abrufen (mit 5 Sekunden Timeout)
+      # Daten vom Smart Meter abrufen (mit 5 Sekunden Timeout über die persistente Session)
       URL = "http://" + cfg.fronius_smartmeter["ipaddress"] + "/solar_api/v1/GetMeterRealtimeData.cgi?Scope=Device&DeviceId=0&DataCollection=MeterRealtimeData"
-      meter_r = requests.get(url=URL, timeout=5)
+      meter_r = self._session.get(url=URL, timeout=5)
       meter_r.raise_for_status() # Löst bei HTTP-Fehlern (z.B. 404, 500) eine Exception aus
       meter_data = meter_r.json()
 
