@@ -45,6 +45,7 @@ class DbusDummyService:
     self._dbusservice.add_path('/FirmwareVersion', 0.1)
     self._dbusservice.add_path('/HardwareVersion', 0)
     self._dbusservice.add_path('/Connected', 1)
+    self._dbusservice.add_path('/ErrorCode', 0)
 
     for path, settings in self._paths.items():
       self._dbusservice.add_path(
@@ -67,6 +68,10 @@ class DbusDummyService:
     except (requests.exceptions.RequestException, ValueError, KeyError) as e:
       # Setzt den Fehlercode im D-Bus, damit VenusOS über den Ausfall Bescheid weiß
       self._dbusservice['/ErrorCode'] = 1
+      self._dbusservice['/Ac/Power'] = 0
+      self._dbusservice['/Ac/L1/Power'] = 0
+      self._dbusservice['/Ac/L2/Power'] = 0
+      self._dbusservice['/Ac/L3/Power'] = 0
       logging.error("Fehler beim Abrufen oder Verarbeiten der Smart-Meter-Daten: %s" % e)
       return True # Wichtig: True zurückgeben, damit GLib.timeout_add weiterhin läuft!
 
@@ -130,7 +135,6 @@ def main():
     servicename='com.victronenergy.acload.'+cfg.fronius_smartmeter["name"],
     deviceinstance=41,
     paths={
-      '/ErrorCode': {'initial': 0},
       '/Ac/Power': {'initial': 0},
       '/Ac/Current': {'initial': 0},
       '/Ac/Energy/Forward': {'initial': 0}, # energy bought from the grid

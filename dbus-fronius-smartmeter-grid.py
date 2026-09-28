@@ -48,10 +48,16 @@ class DbusDummyService:
       service.add_path('/FirmwareVersion', 0.1)
       service.add_path('/HardwareVersion', 0)
       service.add_path('/Connected', 1)
+      service.add_path('/ErrorCode', 0) # Permanent registriert, bleibt bei Freeze lesbar
 
       for path, settings in self._paths.items():
+        # Setzt das Timeout für absolut alle übergebenen dynamischen Pfade
         service.add_path(
-          path, settings['initial'], writeable=True, onchangecallback=self._handlechangedvalue)
+          path,
+          settings['initial'],
+          writeable=True,
+          onchangecallback=self._handlechangedvalue
+        )
 
     GLib.timeout_add(cfg.fronius_smartmeter["interval"], self._update) # pause before the next request
 
@@ -72,8 +78,11 @@ class DbusDummyService:
       site_data = pvmeter_data['Body']['Data']['Site']
 
     except (requests.exceptions.RequestException, ValueError, KeyError) as e:
-      # Setzt den Fehlercode im D-Bus, damit VenusOS weiß, dass ein Problem vorliegt
       self._gridbusservice['/ErrorCode'] = 1
+      self._gridbusservice['/Ac/Power'] = 0
+      self._gridbusservice['/Ac/L1/Power'] = 0
+      self._gridbusservice['/Ac/L2/Power'] = 0
+      self._gridbusservice['/Ac/L3/Power'] = 0
       logging.error("Fehler beim Abrufen oder Verarbeiten der Daten: %s" % e)
       return True # Wichtig: True zurückgeben, damit GLib.timeout_add weiterhin läuft!
 
@@ -147,7 +156,6 @@ def main():
     servicename='com.victronenergy.grid.'+cfg.fronius_pvinverter["name"],
     deviceinstance=40,
     paths={
-      '/ErrorCode': {'initial': 0},
       '/Ac/Power': {'initial': 0},
       '/Ac/Current': {'initial': 0},
       '/Ac/Energy/Forward': {'initial': 0}, # energy bought from the grid
